@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -9,28 +12,48 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 
+// Zodスキーマの定義
+const loginSchema = z.object({
+  email: z
+    .string()
+    .min(1, 'メールアドレスを入力してください')
+    .email('有効なメールアドレスを入力してください'),
+  password: z
+    .string()
+    .min(1, 'パスワードを入力してください')
+    .min(6, 'パスワードは6文字以上で入力してください'),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
+
 export function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
+
+  const onSubmit = async (data: LoginFormData) => {
+    setServerError(null);
 
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: data.email,
+        password: data.password,
       });
 
       if (error) {
-        setError(error.message);
-        setLoading(false);
+        setServerError(error.message);
         toast.error('ログインに失敗しました', {
           description: error.message,
         });
@@ -42,16 +65,15 @@ export function LoginForm() {
       router.push('/');
       router.refresh();
     } catch (err) {
-      setError('ログインに失敗しました。もう一度お試しください。');
-      setLoading(false);
+      setServerError('ログインに失敗しました。もう一度お試しください。');
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {serverError && (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{serverError}</AlertDescription>
         </Alert>
       )}
 
@@ -62,11 +84,13 @@ export function LoginForm() {
         <Input
           id="email"
           type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
           placeholder="example@email.com"
+          {...register('email')}
+          aria-invalid={errors.email ? 'true' : 'false'}
         />
+        {errors.email && (
+          <p className="text-sm text-destructive">{errors.email.message}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -76,15 +100,17 @@ export function LoginForm() {
         <Input
           id="password"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
           placeholder="パスワード"
+          {...register('password')}
+          aria-invalid={errors.password ? 'true' : 'false'}
         />
+        {errors.password && (
+          <p className="text-sm text-destructive">{errors.password.message}</p>
+        )}
       </div>
 
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? 'ログイン中...' : 'ログイン'}
+      <Button type="submit" disabled={isSubmitting} className="w-full">
+        {isSubmitting ? 'ログイン中...' : 'ログイン'}
       </Button>
 
       <div className="text-center text-sm text-muted-foreground">

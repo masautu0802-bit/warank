@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,17 @@ export function Header() {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // スクロール連動アニメーション
+  const { scrollY } = useScroll();
+  const headerHeight = useTransform(scrollY, [0, 100], [64, 56]);
+  const headerOpacity = useTransform(scrollY, [0, 100], [0.95, 1]);
+  const headerShadow = useTransform(
+    scrollY,
+    [0, 100],
+    ['0 0 0 rgba(0,0,0,0)', '0 4px 6px -1px rgba(0,0,0,0.1)']
+  );
 
   useEffect(() => {
     const supabase = createClient();
@@ -44,8 +56,6 @@ export function Header() {
     }, 500);
   };
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   const navLinks = [
     { href: '/', label: 'ホーム' },
     { href: '/rankings', label: 'ランキング' },
@@ -53,12 +63,55 @@ export function Header() {
     { href: '/predictions', label: '予想', requiresAuth: true },
   ];
 
+  // モバイルメニューのアニメーション設定
+  const mobileMenuVariants = {
+    hidden: {
+      opacity: 0,
+      y: -10,
+      transition: {
+        duration: 0.2,
+      },
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.2,
+      },
+    },
+  };
+
+  const menuItemVariants = {
+    hidden: { opacity: 0, x: -10 },
+    visible: (i: number) => ({
+      opacity: 1,
+      x: 0,
+      transition: {
+        delay: i * 0.05,
+        duration: 0.2,
+      },
+    }),
+  };
+
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 relative">
-      <div className="container flex h-16 items-center justify-between px-4">
+    <motion.header
+      className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 relative"
+      style={{
+        height: headerHeight,
+        opacity: headerOpacity,
+        boxShadow: headerShadow,
+      }}
+    >
+      <div className="container flex h-full items-center justify-between px-4">
         {/* ロゴ */}
         <Link href="/" className="flex items-center space-x-2">
-          <span className="text-xl font-bold">Wa-Rank</span>
+          <motion.span
+            className="text-xl font-bold"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Wa-Rank
+          </motion.span>
         </Link>
 
         {/* デスクトップナビゲーション */}
@@ -69,13 +122,20 @@ export function Header() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`text-sm font-medium transition-colors hover:text-primary ${
+                className={`text-sm font-medium transition-colors hover:text-primary relative ${
                   pathname === link.href
                     ? 'text-foreground'
                     : 'text-muted-foreground'
                 }`}
               >
                 {link.label}
+                {pathname === link.href && (
+                  <motion.div
+                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary"
+                    layoutId="activeNav"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
               </Link>
             );
           })}
@@ -92,11 +152,13 @@ export function Header() {
           className="md:hidden"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
-          <svg
+          <motion.svg
             className="h-6 w-6"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            animate={{ rotate: mobileMenuOpen ? 90 : 0 }}
+            transition={{ duration: 0.2 }}
           >
             {mobileMenuOpen ? (
               <path
@@ -113,39 +175,54 @@ export function Header() {
                 d="M4 6h16M4 12h16M4 18h16"
               />
             )}
-          </svg>
+          </motion.svg>
         </Button>
 
         {/* モバイルメニュー */}
-        {mobileMenuOpen && (
-          <nav className="absolute top-16 left-0 right-0 bg-background border-b md:hidden">
-            <div className="container px-4 py-4 space-y-4">
-              {/* モバイル検索バー */}
-              <div className="pb-2 border-b">
-                <SearchBar />
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.nav
+              className="absolute top-full left-0 right-0 bg-background border-b md:hidden"
+              variants={mobileMenuVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+            >
+              <div className="container px-4 py-4 space-y-4">
+                {/* モバイル検索バー */}
+                <div className="pb-2 border-b">
+                  <SearchBar />
+                </div>
+                <div className="space-y-2">
+                  {navLinks.map((link, index) => {
+                    if (link.requiresAuth && !user) return null;
+                    return (
+                      <motion.div
+                        key={link.href}
+                        custom={index}
+                        variants={menuItemVariants}
+                        initial="hidden"
+                        animate="visible"
+                      >
+                        <Link
+                          href={link.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors hover:bg-accent ${
+                            pathname === link.href
+                              ? 'bg-accent text-foreground'
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          {link.label}
+                        </Link>
+                      </motion.div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="space-y-2">
-                {navLinks.map((link) => {
-                  if (link.requiresAuth && !user) return null;
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={`block px-4 py-2 rounded-md text-sm font-medium transition-colors hover:bg-accent ${
-                        pathname === link.href
-                          ? 'bg-accent text-foreground'
-                          : 'text-muted-foreground'
-                      }`}
-                    >
-                      {link.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          </nav>
-        )}
+            </motion.nav>
+          )}
+        </AnimatePresence>
 
         {/* 認証ボタンとテーマ切り替え */}
         <div className="flex items-center space-x-2 sm:space-x-4">
@@ -162,23 +239,27 @@ export function Header() {
               >
                 プロフィール
               </Link>
-              <button
+              <motion.button
                 onClick={handleSignOut}
                 className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-primary"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 ログアウト
-              </button>
+              </motion.button>
             </div>
           ) : (
-            <Link
-              href="/login"
-              className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-primary"
-            >
-              ログイン
-            </Link>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Link
+                href="/login"
+                className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-primary"
+              >
+                ログイン
+              </Link>
+            </motion.div>
           )}
         </div>
       </div>
-    </header>
+    </motion.header>
   );
 }

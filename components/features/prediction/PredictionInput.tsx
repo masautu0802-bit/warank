@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import type { Event, Comedian, PredictionType, PredictionEntry } from '@/lib/types';
 import { calculateOdds } from '@/lib/utils/predictionUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +15,29 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { calculateAppData } from '@/lib/utils/calculatePoints';
 import { toast } from 'sonner';
 
+// Zodスキーマの定義
+const predictionSchema = z.object({
+  predictionType: z.enum(['winner', 'top3', 'finalist']),
+  selectedComedianIds: z
+    .array(z.string())
+    .min(1, '芸人を選択してください'),
+  betPoints: z
+    .number({ invalid_type_error: '数値を入力してください' })
+    .min(1, '賭けポイントは1以上で入力してください')
+    .max(10000, '賭けポイントは10000以下で入力してください'),
+}).refine(
+  (data) => {
+    const maxSelections = data.predictionType === 'winner' ? 1 : data.predictionType === 'top3' ? 3 : 5;
+    return data.selectedComedianIds.length <= maxSelections;
+  },
+  {
+    message: '選択可能な芸人数を超えています',
+    path: ['selectedComedianIds'],
+  }
+);
+
+type PredictionFormData = z.infer<typeof predictionSchema>;
+
 interface PredictionInputProps {
   event: Event;
   performers: Comedian[];
@@ -19,13 +45,31 @@ interface PredictionInputProps {
 
 export function PredictionInput({ event, performers }: PredictionInputProps) {
   const router = useRouter();
-  const [predictionType, setPredictionType] = useState<PredictionType>('winner');
-  const [selectedComedianIds, setSelectedComedianIds] = useState<string[]>([]);
-  const [betPoints, setBetPoints] = useState<string>('100');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [appData, setAppData] = useState<Awaited<ReturnType<typeof calculateAppData>> | null>(null);
+
+  const {
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<PredictionFormData>({
+    resolver: zodResolver(predictionSchema),
+    defaultValues: {
+      predictionType: 'winner',
+      selectedComedianIds: [],
+      betPoints: 100,
+    },
+  });
+
+  const predictionType = watch('predictionType');
+  const selectedComedianIds = watch('selectedComedianIds');
+  const betPoints = watch('betPoints');
+
+  // 予想タイプに応じて選択可能な芸人数を制限
+  const maxSelections = predictionType === 'winner' ? 1 : predictionType === 'top3' ? 3 : 5;
 
   // アプリケーションデータを取得（オッズ計算用）
   useEffect(() => {
@@ -49,27 +93,25 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
     fetchAppData();
   }, []);
 
-  // 予想タイプに応じて選択可能な芸人数を制限
-  const maxSelections = predictionType === 'winner' ? 1 : predictionType === 'top3' ? 3 : 5;
-
   // 芸人の選択/解除
   const toggleComedian = (comedianId: string) => {
-    setSelectedComedianIds((prev) => {
-      if (prev.includes(comedianId)) {
-        return prev.filter((id) => id !== comedianId);
-      }
-      if (prev.length >= maxSelections) {
-        return prev;
-      }
-      return [...prev, comedianId];
-    });
+    const current = selectedComedianIds;
+    if (current.includes(comedianId)) {
+      setValue('selectedComedianIds', current.filter((id) => id !== comedianId));
+    } else if (current.length < maxSelections) {
+      setValue('selectedComedianIds', [...current, comedianId]);
+    }
+  };
+
+  // 予想タイプ変更時に選択をリセット
+  const handlePredictionTypeChange = (type: PredictionType) => {
+    setValue('predictionType', type);
+    setValue('selectedComedianIds', []);
   };
 
   // オッズを計算
   const calculateOddsForSelection = (): number => {
     if (!appData || selectedComedianIds.length === 0) return 1.0;
-
-    // 最初の選択された芸人のオッズを計算
     const firstComedianId = selectedComedianIds[0];
     return calculateOdds(firstComedianId, event.id, predictionType, appData);
   };
@@ -77,31 +119,8 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
   const odds = calculateOddsForSelection();
 
   // 予想を保存
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    const points = parseInt(betPoints, 10);
-    if (isNaN(points) || points < 1) {
-      const errorMsg = '賭けポイントは1以上で入力してください';
-      setError(errorMsg);
-      setLoading(false);
-      toast.error('入力エラー', {
-        description: errorMsg,
-      });
-      return;
-    }
-
-    if (selectedComedianIds.length === 0) {
-      const errorMsg = '芸人を選択してください';
-      setError(errorMsg);
-      setLoading(false);
-      toast.error('入力エラー', {
-        description: errorMsg,
-      });
-      return;
-    }
+  const onSubmit = async (data: PredictionFormData) => {
+    setServerError(null);
 
     try {
       const supabase = createClient();
@@ -110,16 +129,15 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        setError('ログインが必要です');
-        setLoading(false);
+        setServerError('ログインが必要です');
         return;
       }
 
       // 予想エントリーを作成
       const predictionEntry: PredictionEntry = {
-        predictionType,
-        predictedComedianIds: selectedComedianIds,
-        betPoints: points,
+        predictionType: data.predictionType,
+        predictedComedianIds: data.selectedComedianIds,
+        betPoints: data.betPoints,
         odds,
       };
 
@@ -137,7 +155,7 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
           .from('event_predictions')
           .update({
             predictions: [predictionEntry],
-            total_bet_points: points,
+            total_bet_points: data.betPoints,
             updated_at: new Date().toISOString(),
           })
           .eq('id', existing.id);
@@ -151,7 +169,7 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
             event_id: event.id,
             user_id: user.id,
             predictions: [predictionEntry],
-            total_bet_points: points,
+            total_bet_points: data.betPoints,
             paid_out: false,
           });
 
@@ -159,17 +177,15 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
       }
 
       setSuccess(true);
-      setLoading(false);
       toast.success('予想を保存しました', {
-        description: `${points}ptで予想を投稿しました`,
+        description: `${data.betPoints}ptで予想を投稿しました`,
       });
       setTimeout(() => {
         router.refresh();
       }, 1000);
     } catch (err: any) {
       const errorMessage = err.message || '予想の保存に失敗しました';
-      setError(errorMessage);
-      setLoading(false);
+      setServerError(errorMessage);
       toast.error('予想の保存に失敗しました', {
         description: errorMessage,
       });
@@ -192,10 +208,10 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
         <CardTitle>予想を入力</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {serverError && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{serverError}</AlertDescription>
             </Alert>
           )}
 
@@ -205,10 +221,7 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                onClick={() => {
-                  setPredictionType('winner');
-                  setSelectedComedianIds([]);
-                }}
+                onClick={() => handlePredictionTypeChange('winner')}
                 variant={predictionType === 'winner' ? 'default' : 'outline'}
                 size="sm"
               >
@@ -216,10 +229,7 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
               </Button>
               <Button
                 type="button"
-                onClick={() => {
-                  setPredictionType('top3');
-                  setSelectedComedianIds([]);
-                }}
+                onClick={() => handlePredictionTypeChange('top3')}
                 variant={predictionType === 'top3' ? 'default' : 'outline'}
                 size="sm"
               >
@@ -227,10 +237,7 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
               </Button>
               <Button
                 type="button"
-                onClick={() => {
-                  setPredictionType('finalist');
-                  setSelectedComedianIds([]);
-                }}
+                onClick={() => handlePredictionTypeChange('finalist')}
                 variant={predictionType === 'finalist' ? 'default' : 'outline'}
                 size="sm"
               >
@@ -268,6 +275,9 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
                 );
               })}
             </div>
+            {errors.selectedComedianIds && (
+              <p className="text-sm text-destructive mt-1">{errors.selectedComedianIds.message}</p>
+            )}
           </div>
 
           {/* 賭けポイント */}
@@ -275,14 +285,23 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
             <label htmlFor="betPoints" className="text-sm font-medium mb-2 block">
               賭けポイント
             </label>
-            <Input
-              id="betPoints"
-              type="number"
-              min="1"
-              value={betPoints}
-              onChange={(e) => setBetPoints(e.target.value)}
-              required
+            <Controller
+              name="betPoints"
+              control={control}
+              render={({ field }) => (
+                <Input
+                  id="betPoints"
+                  type="number"
+                  min="1"
+                  {...field}
+                  onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                  aria-invalid={errors.betPoints ? 'true' : 'false'}
+                />
+              )}
             />
+            {errors.betPoints && (
+              <p className="text-sm text-destructive mt-1">{errors.betPoints.message}</p>
+            )}
           </div>
 
           {/* オッズ表示 */}
@@ -291,15 +310,13 @@ export function PredictionInput({ event, performers }: PredictionInputProps) {
               <div className="text-sm text-muted-foreground mb-1">オッズ</div>
               <div className="text-2xl font-bold">{odds.toFixed(1)}倍</div>
               <div className="text-sm text-muted-foreground mt-1">
-                的中時の払い戻し: {(
-                  parseInt(betPoints, 10) * odds
-                ).toLocaleString()}pt
+                的中時の払い戻し: {(betPoints * odds).toLocaleString()}pt
               </div>
             </div>
           )}
 
-          <Button type="submit" disabled={loading || selectedComedianIds.length === 0} className="w-full">
-            {loading ? '保存中...' : '予想を保存'}
+          <Button type="submit" disabled={isSubmitting || selectedComedianIds.length === 0} className="w-full">
+            {isSubmitting ? '保存中...' : '予想を保存'}
           </Button>
         </form>
       </CardContent>
