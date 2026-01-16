@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { animate, stagger } from 'animejs';
+import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Event, EventTier } from '@/lib/types';
 import { EventList } from '@/components/features/event/EventList';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,6 @@ export function EventsPageClient({ events }: EventsPageClientProps) {
   const [dateFilter, setDateFilter] = useState<'all' | 'upcoming' | 'past'>(
     'all'
   );
-  const eventListRef = useRef<HTMLDivElement>(null);
 
   // ブランド一覧を取得
   const brands = useMemo(() => {
@@ -54,34 +53,27 @@ export function EventsPageClient({ events }: EventsPageClientProps) {
     });
   }, [events, selectedTier, selectedBrand, dateFilter]);
 
-  // アニメーション（anime.js使用）
-  useEffect(() => {
-    if (eventListRef.current && eventListRef.current.children.length > 0) {
-      const children = Array.from(
-        eventListRef.current.children
-      ) as HTMLElement[];
-
-      animate(children, {
-        opacity: [0, 1],
-        translateY: [20, 0],
-        delay: stagger(50, { from: 'start' }),
-        duration: 500,
-        ease: 'easeOutQuad',
-      });
-    }
-  }, [filteredEvents]);
-
   return (
     <div className="container mx-auto px-4 py-4 sm:py-6 md:py-8">
-      <div className="mb-6 sm:mb-8">
+      <motion.div
+        className="mb-6 sm:mb-8"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">イベント一覧</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
           お笑いイベントの一覧を表示します
         </p>
-      </div>
+      </motion.div>
 
       {/* フィルター */}
-      <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+      <motion.div
+        className="mb-4 sm:mb-6 space-y-3 sm:space-y-4"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+      >
         {/* ティアフィルター */}
         <div>
           <label className="text-xs sm:text-sm font-medium mb-2 block">ティア</label>
@@ -157,12 +149,20 @@ export function EventsPageClient({ events }: EventsPageClientProps) {
             ))}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* イベント一覧（アニメーション対象） */}
-      <div ref={eventListRef}>
-        <EventList events={filteredEvents} />
-      </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${selectedTier}-${selectedBrand}-${dateFilter}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <EventList events={filteredEvents} />
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

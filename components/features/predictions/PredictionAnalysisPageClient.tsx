@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useEffect, useRef } from 'react';
-import { animate, stagger } from 'animejs';
+import { useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { PredictionResult } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
@@ -13,7 +13,6 @@ interface PredictionAnalysisPageClientProps {
 export function PredictionAnalysisPageClient({
   results,
 }: PredictionAnalysisPageClientProps) {
-  const resultsRef = useRef<HTMLDivElement>(null);
 
   // 統計を計算
   const stats = useMemo(() => {
@@ -34,20 +33,7 @@ export function PredictionAnalysisPageClient({
     };
   }, [results]);
 
-  // アニメーション
-  useEffect(() => {
-    if (resultsRef.current && resultsRef.current.children.length > 0) {
-      const children = Array.from(resultsRef.current.children) as HTMLElement[];
-
-      animate(children, {
-        opacity: [0, 1],
-        translateY: [20, 0],
-        delay: stagger(50, { from: 'start' }),
-        duration: 500,
-        ease: 'easeOutQuad',
-      });
-    }
-  }, [results]);
+  // アニメーションは後で実装
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -114,7 +100,7 @@ export function PredictionAnalysisPageClient({
           <CardTitle>予想結果一覧</CardTitle>
         </CardHeader>
         <CardContent>
-          <div ref={resultsRef} className="space-y-4">
+          <div  className="space-y-4">
             {results.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 予想結果がありません
@@ -123,7 +109,7 @@ export function PredictionAnalysisPageClient({
               results.map((result, index) => (
                 <Link
                   key={index}
-                  href={`/event/${result.eventId}`}
+                  h`}
                   className="block p-4 rounded-lg border hover:bg-accent transition-colors"
                 >
                   <div className="flex items-start justify-between">

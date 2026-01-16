@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { animate, stagger } from 'animejs';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { User } from '@supabase/supabase-js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,27 +32,11 @@ export function ProfilePageClient({
   predictions,
 }: ProfilePageClientProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'predictions' | 'favorites'>('overview');
-  const predictionsRef = useRef<HTMLDivElement>(null);
 
   // 初期ポイント（プロフィールがない場合）
   const balance = profile?.balance ?? 10000;
 
-  // アニメーション
-  useEffect(() => {
-    if (predictionsRef.current && predictionsRef.current.children.length > 0) {
-      const children = Array.from(
-        predictionsRef.current.children
-      ) as HTMLElement[];
-
-      animate(children, {
-        opacity: [0, 1],
-        translateY: [20, 0],
-        delay: stagger(50, { from: 'start' }),
-        duration: 500,
-        ease: 'easeOutQuad',
-      });
-    }
-  }, [predictions]);
+  // アニメーションは後で実装
 
   return (
     <div className="container mx-auto px-4 py-4 sm:py-6 md:py-8">
@@ -137,7 +121,7 @@ export function ProfilePageClient({
               <CardTitle>予想履歴</CardTitle>
             </CardHeader>
             <CardContent>
-              <div ref={predictionsRef} className="space-y-2 sm:space-y-3">
+              <div  className="space-y-2 sm:space-y-3">
                 {predictions.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
                     予想履歴がありません
@@ -146,7 +130,7 @@ export function ProfilePageClient({
                   predictions.map((prediction) => (
                     <Link
                       key={prediction.id}
-                      href={`/event/${prediction.event_id}`}
+                      h`}
                       className="block p-3 sm:p-4 rounded-lg border hover:bg-accent active:bg-accent transition-colors touch-manipulation"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">

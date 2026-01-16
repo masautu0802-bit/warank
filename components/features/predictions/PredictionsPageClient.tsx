@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { animate, stagger } from 'animejs';
+import { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Event } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,6 @@ export function PredictionsPageClient({
   userPredictions,
 }: PredictionsPageClientProps) {
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
-  const eventsRef = useRef<HTMLDivElement>(null);
 
   // ブランドごとにグループ化
   const eventsByBrand = useMemo(() => {
@@ -67,20 +66,7 @@ export function PredictionsPageClient({
     return userPredictions.some((p) => p.event_id === eventId);
   };
 
-  // アニメーション
-  useEffect(() => {
-    if (eventsRef.current && eventsRef.current.children.length > 0) {
-      const children = Array.from(eventsRef.current.children) as HTMLElement[];
-
-      animate(children, {
-        opacity: [0, 1],
-        translateY: [20, 0],
-        delay: stagger(50, { from: 'start' }),
-        duration: 500,
-        ease: 'easeOutQuad',
-      });
-    }
-  }, [filteredEvents]);
+  // アニメーションは後で実装
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -117,7 +103,7 @@ export function PredictionsPageClient({
       )}
 
       {/* イベント一覧 */}
-      <div ref={eventsRef} className="space-y-4">
+      <div  className="space-y-4">
         {filteredEvents.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
@@ -165,7 +151,7 @@ export function PredictionsPageClient({
                       </div>
                     </div>
                     <Button asChild variant={hasPred ? 'outline' : 'default'}>
-                      <Link href={`/event/${event.id}`}>
+                      <Link h`}>
                         {hasPred ? '予想を確認' : '予想する'}
                       </Link>
                     </Button>

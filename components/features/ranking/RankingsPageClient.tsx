@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { animate, stagger } from 'animejs';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { ComedianWithPoints } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,22 +14,8 @@ interface RankingsPageClientProps {
 }
 
 export function RankingsPageClient({ rankings }: RankingsPageClientProps) {
-  const rankingsRef = useRef<HTMLDivElement>(null);
 
-  // アニメーション（anime.js使用）
-  useEffect(() => {
-    if (rankingsRef.current && rankingsRef.current.children.length > 0) {
-      const children = Array.from(rankingsRef.current.children) as HTMLElement[];
-
-      animate(children, {
-        opacity: [0, 1],
-        translateY: [20, 0],
-        delay: stagger(30, { from: 'start' }),
-        duration: 500,
-        ease: 'easeOutQuad',
-      });
-    }
-  }, [rankings]);
+  // アニメーションは後で実装
 
   return (
     <div className="container mx-auto px-4 py-4 sm:py-6 md:py-8">
@@ -40,7 +26,7 @@ export function RankingsPageClient({ rankings }: RankingsPageClientProps) {
         </p>
       </div>
 
-      <div ref={rankingsRef} className="space-y-2 sm:space-y-3">
+      <div  className="space-y-2 sm:space-y-3">
         {rankings.map((comedian) => {
           // 順位に応じたバッジのバリアント
           const getRankBadgeVariant = (rank: number) => {
@@ -66,7 +52,7 @@ export function RankingsPageClient({ rankings }: RankingsPageClientProps) {
           return (
             <Link
               key={comedian.id}
-              href={`/comedian/${comedian.id}`}
+              h`}
               className="block touch-manipulation group"
             >
               <Card className="hover:shadow-md active:bg-accent transition-all duration-200 cursor-pointer">

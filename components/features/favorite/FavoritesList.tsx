@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { animate, stagger } from 'animejs';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import type { UserFavorite, FavoriteType, Comedian, Event } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,6 @@ export function FavoritesList({ userId }: FavoritesListProps) {
   const [events, setEvents] = useState<Record<string, Event>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'comedians' | 'events'>('all');
-  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchFavorites = async () => {
@@ -83,19 +82,7 @@ export function FavoritesList({ userId }: FavoritesListProps) {
     fetchFavorites();
   }, [userId]);
 
-  // アニメーション
-  useEffect(() => {
-    if (listRef.current && listRef.current.children.length > 0) {
-      const children = Array.from(listRef.current.children) as HTMLElement[];
-      animate(children, {
-        opacity: [0, 1],
-        translateY: [20, 0],
-        delay: stagger(50, { from: 'start' }),
-        duration: 500,
-        easing: 'easeOutQuad',
-      });
-    }
-  }, [favorites, activeTab]);
+  // アニメーションは後で実装
 
   const filteredFavorites = favorites.filter((f) => {
     if (activeTab === 'all') return true;
@@ -135,7 +122,7 @@ export function FavoritesList({ userId }: FavoritesListProps) {
               <TabsTrigger value="events">イベント ({eventFavorites.length})</TabsTrigger>
             </TabsList>
 
-            <div ref={listRef} className="space-y-3">
+            <div className="space-y-3">
               <TabsContent value="all" className="mt-0">
                 {filteredFavorites.map((favorite) => {
                   if (favorite.favorite_type === 'comedian') {
